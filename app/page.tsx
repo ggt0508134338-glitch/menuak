@@ -4,9 +4,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const branches = [
-  { id: "hamdaniyah", name: "فرع الحمدانية", phone: "" },
-  { id: "harazat", name: "فرع الحرزات", phone: "" },
-  { id: "safa", name: "فرع الصفا", phone: "" },
+  { id: "hamdaniyah", name: "فرع الحمدانية", phone: "966578824101" },
+  { id: "harazat", name: "فرع الحرزات", phone: "966502830286" },
+  { id: "safa", name: "فرع الصفا", phone: "966533036479" },
 ];
 
 const products = [
@@ -66,10 +66,13 @@ export default function Home() {
   const markerInstance = useRef<any>(null);
 
   const selectedBranch = branches.find((b) => b.id === branch)!;
+
   const visibleProducts = products.filter(
     (p) => category === "الكل" || p.category === category
   );
+
   const count = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+
   const total = useMemo(
     () => products.reduce((sum, p) => sum + p.price * (cart[p.id] || 0), 0),
     [cart]
@@ -101,7 +104,9 @@ export default function Home() {
       return;
     }
 
-    const existing = document.getElementById("google-maps-script") as HTMLScriptElement | null;
+    const existing = document.getElementById(
+      "google-maps-script"
+    ) as HTMLScriptElement | null;
 
     if (existing) {
       existing.addEventListener("load", initializeMap);
@@ -112,10 +117,14 @@ export default function Home() {
 
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAP_KEY)}&callback=initHalehaMap&language=ar&region=SA`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+      MAP_KEY
+    )}&callback=initHalehaMap&language=ar&region=SA`;
     script.async = true;
     script.defer = true;
-    script.onerror = () => setMapError("تعذر تحميل الخريطة. تحقق من المفتاح وإعدادات Google Cloud.");
+    script.onerror = () =>
+      setMapError("تعذر تحميل الخريطة. تحقق من المفتاح وإعدادات Google Cloud.");
+
     document.head.appendChild(script);
 
     return () => {
@@ -181,12 +190,16 @@ export default function Home() {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
+
         setCoords(point);
         mapInstance.current?.setCenter(point);
         mapInstance.current?.setZoom(17);
         markerInstance.current?.setPosition(point);
       },
-      () => setMapError("تعذر تحديد موقعك. اسمح للموقع باستخدام الموقع أو حرّك الدبوس يدويًا."),
+      () =>
+        setMapError(
+          "تعذر تحديد موقعك. اسمح للموقع باستخدام الموقع أو حرّك الدبوس يدويًا."
+        ),
       { enableHighAccuracy: true, timeout: 12000 }
     );
   }
@@ -198,7 +211,7 @@ export default function Home() {
     }
 
     if (!selectedBranch.phone) {
-      alert("رقم واتساب الفرع غير مضاف بعد. أضف الرقم الصحيح قبل استقبال الطلبات.");
+      alert("رقم واتساب الفرع غير مضاف بعد.");
       return;
     }
 
@@ -218,7 +231,10 @@ export default function Home() {
 
     const lines = products
       .filter((p) => cart[p.id])
-      .map((p) => `${p.name} × ${cart[p.id]} = ${p.price * cart[p.id]} ريال`);
+      .map(
+        (p) =>
+          `${p.name} × ${cart[p.id]} = ${p.price * cart[p.id]} ريال`
+      );
 
     const addressLines =
       orderType === "delivery"
@@ -241,7 +257,9 @@ export default function Home() {
     const message = [
       "مرحباً، أريد طلباً من حليها",
       `الفرع: ${selectedBranch.name}`,
-      `نوع الطلب: ${orderType === "delivery" ? "توصيل إلى المنزل" : "استلام من الفرع"}`,
+      `نوع الطلب: ${
+        orderType === "delivery" ? "توصيل إلى المنزل" : "استلام من الفرع"
+      }`,
       "",
       ...lines,
       ...addressLines,
@@ -253,6 +271,7 @@ export default function Home() {
 
     const phone = selectedBranch.phone.replace(/\D/g, "");
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
     window.location.href = url;
   }
 
@@ -264,6 +283,7 @@ export default function Home() {
             <div className="text-3xl font-black text-pink-600">حليها ♡</div>
             <p className="text-sm text-gray-500 mt-1">حلا يضبط مزاجك</p>
           </div>
+
           <button
             onClick={() => setShowCart(true)}
             className="rounded-2xl bg-pink-600 text-white px-4 py-3 font-bold"
@@ -276,21 +296,27 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-4 pt-7">
         <div className="rounded-3xl bg-gradient-to-l from-pink-200 via-pink-100 to-white p-6 md:p-10">
           <p className="text-pink-600 font-bold mb-2">أهلاً بك في حليها</p>
+
           <h1 className="text-3xl md:text-5xl font-black leading-tight">
             لحظات حلوة تبدأ من هنا 🍩
           </h1>
+
           <p className="mt-3 text-gray-600">
             اختر حلاك المفضل، وحدد الفرع، وأرسل طلبك عبر واتساب.
           </p>
+
           <div className="mt-6 max-w-md">
             <label className="block font-bold mb-2">اختر الفرع</label>
+
             <select
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               className="w-full rounded-xl border border-pink-200 bg-white p-3"
             >
               {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
               ))}
             </select>
           </div>
@@ -314,25 +340,49 @@ export default function Home() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-10">
           {visibleProducts.map((p) => (
-            <article key={p.id} className="rounded-2xl bg-white border border-pink-100 overflow-hidden shadow-sm">
+            <article
+              key={p.id}
+              className="rounded-2xl bg-white border border-pink-100 overflow-hidden shadow-sm"
+            >
               <div className="h-32 md:h-40 bg-pink-50 flex items-center justify-center text-6xl">
                 {p.emoji}
               </div>
+
               <div className="p-3 md:p-4">
                 <h2 className="font-black">{p.name}</h2>
-                <p className="text-sm text-gray-500 mt-1 min-h-10">{p.description}</p>
+
+                <p className="text-sm text-gray-500 mt-1 min-h-10">
+                  {p.description}
+                </p>
+
                 <div className="flex items-center justify-between gap-2 mt-3">
                   <strong className="text-pink-600">{p.price} ريال</strong>
+
                   <button
                     onClick={() => changeQty(p.id, 1)}
                     className="rounded-xl bg-pink-600 text-white px-3 py-2 font-bold"
-                  >+</button>
+                  >
+                    +
+                  </button>
                 </div>
+
                 {(cart[p.id] || 0) > 0 && (
                   <div className="flex items-center justify-between mt-3 rounded-xl bg-pink-50 p-2">
-                    <button onClick={() => changeQty(p.id, -1)} className="px-3 font-bold">−</button>
+                    <button
+                      onClick={() => changeQty(p.id, -1)}
+                      className="px-3 font-bold"
+                    >
+                      −
+                    </button>
+
                     <span>{cart[p.id]}</span>
-                    <button onClick={() => changeQty(p.id, 1)} className="px-3 font-bold">+</button>
+
+                    <button
+                      onClick={() => changeQty(p.id, 1)}
+                      className="px-3 font-bold"
+                    >
+                      +
+                    </button>
                   </div>
                 )}
               </div>
@@ -346,46 +396,79 @@ export default function Home() {
           <div className="bg-white rounded-3xl p-5 w-full max-w-xl max-h-[92vh] overflow-auto">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-black">إتمام الطلب</h2>
-              <button onClick={() => setShowCart(false)} className="text-3xl">×</button>
+
+              <button
+                onClick={() => setShowCart(false)}
+                className="text-3xl"
+              >
+                ×
+              </button>
             </div>
 
             <p className="text-gray-500 mt-2">{selectedBranch.name}</p>
 
             <div className="divide-y mt-4">
-              {products.filter((p) => cart[p.id]).map((p) => (
-                <div key={p.id} className="py-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-bold">{p.name}</div>
-                    <div className="text-sm text-gray-500">{p.price} ريال × {cart[p.id]}</div>
+              {products
+                .filter((p) => cart[p.id])
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="font-bold">{p.name}</div>
+
+                      <div className="text-sm text-gray-500">
+                        {p.price} ريال × {cart[p.id]}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => changeQty(p.id, -1)}>−</button>
+                      <span>{cart[p.id]}</span>
+                      <button onClick={() => changeQty(p.id, 1)}>+</button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => changeQty(p.id, -1)}>−</button>
-                    <span>{cart[p.id]}</span>
-                    <button onClick={() => changeQty(p.id, 1)}>+</button>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
 
             <div className="border-t mt-3 pt-4 flex justify-between font-black text-xl">
-              <span>إجمالي المنتجات</span><span>{total.toFixed(2)} ريال</span>
+              <span>إجمالي المنتجات</span>
+              <span>{total.toFixed(2)} ريال</span>
             </div>
 
-            <label className="block font-bold mt-5 mb-2">طريقة استلام الطلب</label>
+            <label className="block font-bold mt-5 mb-2">
+              طريقة استلام الطلب
+            </label>
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setOrderType("pickup")}
-                className={`rounded-xl p-3 border font-bold ${orderType === "pickup" ? "bg-pink-600 text-white" : "border-pink-200"}`}
-              >استلام من الفرع</button>
+                className={`rounded-xl p-3 border font-bold ${
+                  orderType === "pickup"
+                    ? "bg-pink-600 text-white"
+                    : "border-pink-200"
+                }`}
+              >
+                استلام من الفرع
+              </button>
+
               <button
                 onClick={() => setOrderType("delivery")}
-                className={`rounded-xl p-3 border font-bold ${orderType === "delivery" ? "bg-pink-600 text-white" : "border-pink-200"}`}
-              >توصيل للمنزل</button>
+                className={`rounded-xl p-3 border font-bold ${
+                  orderType === "delivery"
+                    ? "bg-pink-600 text-white"
+                    : "border-pink-200"
+                }`}
+              >
+                توصيل للمنزل
+              </button>
             </div>
 
             {orderType === "delivery" && (
               <div className="mt-5 space-y-3">
                 <h3 className="font-black text-lg">حدد موقع التوصيل</h3>
+
                 <p className="text-sm text-gray-600">
                   اضغط على الخريطة لاختيار الموقع، أو اسحب الدبوس إلى باب المنزل.
                 </p>
@@ -399,9 +482,13 @@ export default function Home() {
                   type="button"
                   onClick={requestMyLocation}
                   className="w-full rounded-xl border border-pink-300 p-3 font-bold"
-                >📍 استخدم موقعي الحالي</button>
+                >
+                  📍 استخدم موقعي الحالي
+                </button>
 
-                {mapError && <p className="text-red-600 text-sm">{mapError}</p>}
+                {mapError && (
+                  <p className="text-red-600 text-sm">{mapError}</p>
+                )}
 
                 {coords && (
                   <p className="text-xs text-gray-600 break-all">
@@ -410,33 +497,42 @@ export default function Home() {
                 )}
 
                 {!mapReady && !mapError && (
-                  <p className="text-sm text-gray-500">جارٍ تجهيز الخريطة…</p>
+                  <p className="text-sm text-gray-500">
+                    جارٍ تجهيز الخريطة…
+                  </p>
                 )}
 
                 <h3 className="font-black text-lg pt-2">بيانات التوصيل</h3>
 
-                {([
-                  ["name", "اسم العميل"],
-                  ["phone", "رقم جوال العميل"],
-                  ["district", "الحي"],
-                  ["street", "اسم الشارع"],
-                  ["building", "رقم المبنى"],
-                  ["apartment", "رقم الشقة (اختياري)"],
-                ] as const).map(([key, label]) => (
+                {(
+                  [
+                    ["name", "اسم العميل"],
+                    ["phone", "رقم جوال العميل"],
+                    ["district", "الحي"],
+                    ["street", "اسم الشارع"],
+                    ["building", "رقم المبنى"],
+                    ["apartment", "رقم الشقة (اختياري)"],
+                  ] as const
+                ).map(([key, label]) => (
                   <label key={key} className="block">
-                    <span className="block text-sm font-bold mb-1">{label}</span>
+                    <span className="block text-sm font-bold mb-1">
+                      {label}
+                    </span>
+
                     <input
                       value={details[key]}
                       onChange={(e) => updateDetail(key, e.target.value)}
                       placeholder={label}
-                      inputMode={key === "phone" || key === "building" || key === "apartment" ? "text" : "text"}
                       className="w-full rounded-xl border border-pink-200 p-3 outline-pink-400"
                     />
                   </label>
                 ))}
 
                 <label className="block">
-                  <span className="block text-sm font-bold mb-1">تفاصيل إضافية (اختياري)</span>
+                  <span className="block text-sm font-bold mb-1">
+                    تفاصيل إضافية (اختياري)
+                  </span>
+
                   <textarea
                     value={details.notes}
                     onChange={(e) => updateDetail("notes", e.target.value)}
@@ -452,7 +548,7 @@ export default function Home() {
               onClick={sendWhatsApp}
               className="w-full mt-5 rounded-xl bg-green-600 text-white p-4 font-black"
             >
-              متابعة الطلب عبر واتساب
+              إرسال الطلب عبر واتساب
             </button>
 
             <p className="text-xs text-gray-500 mt-3">
