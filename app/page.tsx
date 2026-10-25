@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const branches = [
   { id: "hamdaniyah", name: "فرع الحمدانية", phone: "" },
@@ -23,21 +23,53 @@ const products = [
 ];
 
 const categories = ["الكل", "لقيمات", "دونات", "كنافة"];
+const MAP_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+declare global {
+  interface Window {
+    google?: any;
+    initHalehaMap?: () => void;
+  }
+}
+
+type DeliveryDetails = {
+  name: string;
+  phone: string;
+  district: string;
+  street: string;
+  building: string;
+  apartment: string;
+  notes: string;
+};
 
 export default function Home() {
   const [branch, setBranch] = useState(branches[0].id);
   const [category, setCategory] = useState("الكل");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [showCart, setShowCart] = useState(false);
+  const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState("");
+  const [details, setDetails] = useState<DeliveryDetails>({
+    name: "",
+    phone: "",
+    district: "",
+    street: "",
+    building: "",
+    apartment: "",
+    notes: "",
+  });
+
+  const mapElement = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+  const markerInstance = useRef<any>(null);
 
   const selectedBranch = branches.find((b) => b.id === branch)!;
-
   const visibleProducts = products.filter(
     (p) => category === "الكل" || p.category === category
   );
-
   const count = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
-
   const total = useMemo(
     () => products.reduce((sum, p) => sum + p.price * (cart[p.id] || 0), 0),
     [cart]
@@ -52,35 +84,176 @@ export default function Home() {
     });
   }
 
+  function updateDetail(key: keyof DeliveryDetails, value: string) {
+    setDetails((old) => ({ ...old, [key]: value }));
+  }
+
+  useEffect(() => {
+    if (!showCart || orderType !== "delivery") return;
+
+    if (!MAP_KEY) {
+      setMapError("الخريطة تحتاج إعداد مفتاح Google Maps في إعدادات المشروع.");
+      return;
+    }
+
+    if (window.google?.maps) {
+      initializeMap();
+      return;
+    }
+
+    const existing = document.getElementById("google-maps-script") as HTMLScriptElement | null;
+
+    if (existing) {
+      existing.addEventListener("load", initializeMap);
+      return () => existing.removeEventListener("load", initializeMap);
+    }
+
+    window.initHalehaMap = initializeMap;
+
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAP_KEY)}&callback=initHalehaMap&language=ar&region=SA`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => setMapError("تعذر تحميل الخريطة. تحقق من المفتاح وإعدادات Google Cloud.");
+    document.head.appendChild(script);
+
+    return () => {
+      window.initHalehaMap = undefined;
+    };
+
+    function initializeMap() {
+      if (!mapElement.current || !window.google?.maps) return;
+
+      const google = window.google;
+      const initial = coords || { lat: 21.5433, lng: 39.1728 };
+
+      const map = new google.maps.Map(mapElement.current, {
+        center: initial,
+        zoom: 15,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: true,
+        clickableIcons: false,
+      });
+
+      const marker = new google.maps.Marker({
+        position: initial,
+        map,
+        draggable: true,
+        title: "حدد موقع التوصيل",
+      });
+
+      const updateCoordinates = (position: any) => {
+        if (!position) return;
+        setCoords({
+          lat: position.lat(),
+          lng: position.lng(),
+        });
+      };
+
+      map.addListener("click", (event: any) => {
+        if (!event.latLng) return;
+        marker.setPosition(event.latLng);
+        updateCoordinates(event.latLng);
+      });
+
+      marker.addListener("dragend", () => {
+        updateCoordinates(marker.getPosition());
+      });
+
+      mapInstance.current = map;
+      markerInstance.current = marker;
+      setMapReady(true);
+      setMapError("");
+    }
+  }, [showCart, orderType]);
+
+  function requestMyLocation() {
+    if (!navigator.geolocation) {
+      setMapError("المتصفح لا يدعم تحديد الموقع.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const point = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setCoords(point);
+        mapInstance.current?.setCenter(point);
+        mapInstance.current?.setZoom(17);
+        markerInstance.current?.setPosition(point);
+      },
+      () => setMapError("تعذر تحديد موقعك. اسمح للموقع باستخدام الموقع أو حرّك الدبوس يدويًا."),
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  }
+
   function sendWhatsApp() {
     if (count === 0) {
-      alert("أضف المنتجات إلى السلة أولاً");
+      alert("أضف المنتجات إلى السلة أولاً.");
       return;
     }
 
     if (!selectedBranch.phone) {
-      alert("رقم واتساب لهذا الفرع لم يُضف بعد. ستتم إضافته من الإعدادات لاحقاً.");
+      alert("رقم واتساب الفرع غير مضاف بعد. أضف الرقم الصحيح قبل استقبال الطلبات.");
       return;
+    }
+
+    if (orderType === "delivery") {
+      if (
+        !details.name.trim() ||
+        !details.phone.trim() ||
+        !details.district.trim() ||
+        !details.street.trim() ||
+        !details.building.trim() ||
+        !coords
+      ) {
+        alert("أكمل بيانات العميل والعنوان وحدد موقع التوصيل على الخريطة.");
+        return;
+      }
     }
 
     const lines = products
       .filter((p) => cart[p.id])
-      .map((p) => `${p.name} × ${cart[p.id]} = ${(p.price * cart[p.id]).toFixed(2)} ريال`);
+      .map((p) => `${p.name} × ${cart[p.id]} = ${p.price * cart[p.id]} ريال`);
+
+    const addressLines =
+      orderType === "delivery"
+        ? [
+            "",
+            "بيانات العميل والتوصيل:",
+            `الاسم: ${details.name}`,
+            `جوال العميل: ${details.phone}`,
+            `الحي: ${details.district}`,
+            `الشارع: ${details.street}`,
+            `رقم المبنى: ${details.building}`,
+            `رقم الشقة: ${details.apartment || "غير محدد"}`,
+            `تفاصيل إضافية: ${details.notes || "لا يوجد"}`,
+            `خط العرض: ${coords!.lat}`,
+            `خط الطول: ${coords!.lng}`,
+            `رابط الموقع: https://www.google.com/maps?q=${coords!.lat},${coords!.lng}`,
+          ]
+        : ["نوع الطلب: استلام من الفرع"];
 
     const message = [
       "مرحباً، أريد طلباً من حليها",
       `الفرع: ${selectedBranch.name}`,
+      `نوع الطلب: ${orderType === "delivery" ? "توصيل إلى المنزل" : "استلام من الفرع"}`,
       "",
       ...lines,
+      ...addressLines,
       "",
-      `الإجمالي: ${total.toFixed(2)} ريال`,
-      "يرجى تأكيد الطلب ووقت الاستلام.",
+      `إجمالي المنتجات: ${total.toFixed(2)} ريال`,
+      "رسوم التوصيل: تحددها الإدارة عند تأكيد الطلب",
+      "يرجى تأكيد الطلب والإجمالي النهائي ووقت التوصيل.",
     ].join("\n");
 
-    window.open(
-      `https://wa.me/${selectedBranch.phone}?text=${encodeURIComponent(message)}`,
-      "_blank"
-    );
+    const phone = selectedBranch.phone.replace(/\D/g, "");
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.location.href = url;
   }
 
   return (
@@ -92,7 +265,7 @@ export default function Home() {
             <p className="text-sm text-gray-500 mt-1">حلا يضبط مزاجك</p>
           </div>
           <button
-            onClick={() => setShowCart(!showCart)}
+            onClick={() => setShowCart(true)}
             className="rounded-2xl bg-pink-600 text-white px-4 py-3 font-bold"
           >
             🛒 السلة ({count})
@@ -114,7 +287,7 @@ export default function Home() {
             <select
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              className="w-full rounded-xl border border-pink-200 bg-white p-3 outline-pink-400"
+              className="w-full rounded-xl border border-pink-200 bg-white p-3"
             >
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -153,10 +326,7 @@ export default function Home() {
                   <button
                     onClick={() => changeQty(p.id, 1)}
                     className="rounded-xl bg-pink-600 text-white px-3 py-2 font-bold"
-                    aria-label={`إضافة ${p.name}`}
-                  >
-                    +
-                  </button>
+                  >+</button>
                 </div>
                 {(cart[p.id] || 0) > 0 && (
                   <div className="flex items-center justify-between mt-3 rounded-xl bg-pink-50 p-2">
@@ -169,43 +339,129 @@ export default function Home() {
             </article>
           ))}
         </div>
-
-        {showCart && (
-          <section className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-3">
-            <div className="bg-white rounded-3xl p-5 w-full max-w-lg max-h-[85vh] overflow-auto">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black">سلة الطلب</h2>
-                <button onClick={() => setShowCart(false)} className="text-2xl">×</button>
-              </div>
-              <p className="text-gray-500 mt-2">{selectedBranch.name}</p>
-              <div className="divide-y mt-4">
-                {products.filter((p) => cart[p.id]).map((p) => (
-                  <div key={p.id} className="py-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-bold">{p.name}</div>
-                      <div className="text-sm text-gray-500">{p.price} ريال × {cart[p.id]}</div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => changeQty(p.id, -1)}>−</button>
-                      <span>{cart[p.id]}</span>
-                      <button onClick={() => changeQty(p.id, 1)}>+</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t mt-3 pt-4 flex justify-between font-black text-xl">
-                <span>الإجمالي</span><span>{total.toFixed(2)} ريال</span>
-              </div>
-              <button onClick={sendWhatsApp} className="w-full mt-5 rounded-xl bg-green-600 text-white p-4 font-black">
-                إرسال الطلب عبر واتساب
-              </button>
-              <p className="text-xs text-gray-500 mt-3">
-                الأسعار تجريبية، وأرقام واتساب الفروع تحتاج إلى إعداد قبل استقبال الطلبات.
-              </p>
-            </div>
-          </section>
-        )}
       </section>
+
+      {showCart && (
+        <section className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-2">
+          <div className="bg-white rounded-3xl p-5 w-full max-w-xl max-h-[92vh] overflow-auto">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-black">إتمام الطلب</h2>
+              <button onClick={() => setShowCart(false)} className="text-3xl">×</button>
+            </div>
+
+            <p className="text-gray-500 mt-2">{selectedBranch.name}</p>
+
+            <div className="divide-y mt-4">
+              {products.filter((p) => cart[p.id]).map((p) => (
+                <div key={p.id} className="py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-bold">{p.name}</div>
+                    <div className="text-sm text-gray-500">{p.price} ريال × {cart[p.id]}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => changeQty(p.id, -1)}>−</button>
+                    <span>{cart[p.id]}</span>
+                    <button onClick={() => changeQty(p.id, 1)}>+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t mt-3 pt-4 flex justify-between font-black text-xl">
+              <span>إجمالي المنتجات</span><span>{total.toFixed(2)} ريال</span>
+            </div>
+
+            <label className="block font-bold mt-5 mb-2">طريقة استلام الطلب</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setOrderType("pickup")}
+                className={`rounded-xl p-3 border font-bold ${orderType === "pickup" ? "bg-pink-600 text-white" : "border-pink-200"}`}
+              >استلام من الفرع</button>
+              <button
+                onClick={() => setOrderType("delivery")}
+                className={`rounded-xl p-3 border font-bold ${orderType === "delivery" ? "bg-pink-600 text-white" : "border-pink-200"}`}
+              >توصيل للمنزل</button>
+            </div>
+
+            {orderType === "delivery" && (
+              <div className="mt-5 space-y-3">
+                <h3 className="font-black text-lg">حدد موقع التوصيل</h3>
+                <p className="text-sm text-gray-600">
+                  اضغط على الخريطة لاختيار الموقع، أو اسحب الدبوس إلى باب المنزل.
+                </p>
+
+                <div
+                  ref={mapElement}
+                  className="w-full h-72 rounded-2xl border border-pink-200 bg-gray-100"
+                />
+
+                <button
+                  type="button"
+                  onClick={requestMyLocation}
+                  className="w-full rounded-xl border border-pink-300 p-3 font-bold"
+                >📍 استخدم موقعي الحالي</button>
+
+                {mapError && <p className="text-red-600 text-sm">{mapError}</p>}
+
+                {coords && (
+                  <p className="text-xs text-gray-600 break-all">
+                    الإحداثيات: {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                  </p>
+                )}
+
+                {!mapReady && !mapError && (
+                  <p className="text-sm text-gray-500">جارٍ تجهيز الخريطة…</p>
+                )}
+
+                <h3 className="font-black text-lg pt-2">بيانات التوصيل</h3>
+
+                {([
+                  ["name", "اسم العميل"],
+                  ["phone", "رقم جوال العميل"],
+                  ["district", "الحي"],
+                  ["street", "اسم الشارع"],
+                  ["building", "رقم المبنى"],
+                  ["apartment", "رقم الشقة (اختياري)"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="block">
+                    <span className="block text-sm font-bold mb-1">{label}</span>
+                    <input
+                      value={details[key]}
+                      onChange={(e) => updateDetail(key, e.target.value)}
+                      placeholder={label}
+                      inputMode={key === "phone" || key === "building" || key === "apartment" ? "text" : "text"}
+                      className="w-full rounded-xl border border-pink-200 p-3 outline-pink-400"
+                    />
+                  </label>
+                ))}
+
+                <label className="block">
+                  <span className="block text-sm font-bold mb-1">تفاصيل إضافية (اختياري)</span>
+                  <textarea
+                    value={details.notes}
+                    onChange={(e) => updateDetail("notes", e.target.value)}
+                    placeholder="علامة مميزة أو تعليمات للمندوب"
+                    className="w-full rounded-xl border border-pink-200 p-3 outline-pink-400"
+                    rows={3}
+                  />
+                </label>
+              </div>
+            )}
+
+            <button
+              onClick={sendWhatsApp}
+              className="w-full mt-5 rounded-xl bg-green-600 text-white p-4 font-black"
+            >
+              متابعة الطلب عبر واتساب
+            </button>
+
+            <p className="text-xs text-gray-500 mt-3">
+              سيتم فتح واتساب برسالة جاهزة. راجع الرسالة واضغط إرسال لتأكيد الطلب.
+              رسوم التوصيل غير محددة بعد، وسيتم تأكيدها من الفرع.
+            </p>
+          </div>
+        </section>
+      )}
 
       <footer className="bg-white border-t border-pink-100 p-6 text-center text-sm text-gray-500">
         حليها © جميع الحقوق محفوظة
