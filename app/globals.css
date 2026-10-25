@@ -1,0 +1,41 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --haleha-pink: #f7a8c4;
+  --haleha-dark-pink: #e85d91;
+  --haleha-bg: #fff7fa;
+  --haleha-text: #30252b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+  background: var(--haleha-bg);
+  color: var(--haleha-text);
+  font-family: Arial, Tahoma, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+}
